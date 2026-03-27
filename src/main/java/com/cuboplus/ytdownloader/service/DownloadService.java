@@ -15,47 +15,71 @@ public class DownloadService {
     @Value("${app.download.dir}")
     private String downloadDir;
 
+    // Detectar OS una sola vez
+    private static final boolean IS_WINDOWS = System.getProperty("os.name")
+            .toLowerCase().contains("windows");
+
+    private static final String YTDLP  = IS_WINDOWS ? "yt-dlp"  : "/opt/homebrew/bin/yt-dlp";
+    private static final String FFMPEG = IS_WINDOWS ? "ffmpeg"  : "/opt/homebrew/bin/ffmpeg";
+    private static final String SEP    = IS_WINDOWS ? "\\"      : "/";
+
     public String downloadVideo(String url, String format) throws Exception {
         File dir = new File(downloadDir);
         if (!dir.exists()) dir.mkdirs();
 
         List<String> cmd = new ArrayList<>();
-        cmd.add("/opt/homebrew/bin/yt-dlp");
+        cmd.add(YTDLP);
         cmd.add("--no-playlist");
         cmd.add("-o");
-        cmd.add(downloadDir + "/%(title)s.%(ext)s");
+        cmd.add(downloadDir + SEP + "%(title)s.%(ext)s");
 
         if ("mp3".equalsIgnoreCase(format)) {
             cmd.add("-x");
             cmd.add("--audio-format");
             cmd.add("mp3");
+            cmd.add("--ffmpeg-location");
+            cmd.add(IS_WINDOWS ? "ffmpeg" : "/opt/homebrew/bin/ffmpeg");
         } else {
             cmd.add("-f");
             cmd.add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best");
             cmd.add("--merge-output-format");
             cmd.add("mp4");
+            cmd.add("--ffmpeg-location");
+            cmd.add(IS_WINDOWS ? "ffmpeg" : "/opt/homebrew/bin/ffmpeg");
         }
 
         cmd.add(url);
 
+        System.out.println("▶ OS detectado: " + (IS_WINDOWS ? "Windows" : "Mac/Linux"));
         System.out.println("▶ Ejecutando: " + String.join(" ", cmd));
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
-        pb.environment().put("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
+
+        // PATH para encontrar yt-dlp y ffmpeg en ambos OS
+        if (IS_WINDOWS) {
+            pb.environment().put("PATH",
+                "C:\\Windows\\System32;" +
+                System.getenv("APPDATA") + "\\yt-dlp;" +
+                "C:\\Program Files\\ffmpeg\\bin;" +
+                System.getenv("PATH"));
+        } else {
+            pb.environment().put("PATH",
+                "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
+        }
+
         Process process = pb.start();
 
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        StringBuilder output = new StringBuilder();
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()));
         String line;
         while ((line = reader.readLine()) != null) {
             System.out.println("[yt-dlp] " + line);
-            output.append(line).append("\n");
         }
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new Exception("yt-dlp falló (código " + exitCode + "): " + output);
+            throw new Exception("yt-dlp falló con código: " + exitCode);
         }
 
         // Buscar el archivo más reciente en la carpeta
@@ -72,16 +96,27 @@ public class DownloadService {
 
     public String getVideoTitle(String url) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(
-            "/opt/homebrew/bin/yt-dlp", "--get-title", "--no-playlist", url
+            YTDLP, "--get-title", "--no-playlist", url
         );
         pb.redirectErrorStream(true);
-        pb.environment().put("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
+        if (IS_WINDOWS) {
+            pb.environment().put("PATH",
+                "C:\\Windows\\System32;" +
+                System.getenv("APPDATA") + "\\yt-dlp;" +
+                System.getenv("PATH"));
+        } else {
+            pb.environment().put("PATH",
+                "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
+        }
+
         Process process = pb.start();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()));
         String title = reader.readLine();
         process.waitFor();
         return title != null ? title : "Video de YouTube";
     }
 
     public String getDownloadDir() { return downloadDir; }
+    public static boolean isWindows() { return IS_WINDOWS; }
 }
