@@ -1,0 +1,7 @@
+target/
+downloads/
+*.class
+*.jar
+.DS_Store
+.env
+application-secret.properties
