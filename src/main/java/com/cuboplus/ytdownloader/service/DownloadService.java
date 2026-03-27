@@ -22,6 +22,7 @@ public class DownloadService {
         List<String> cmd = new ArrayList<>();
         cmd.add("/opt/homebrew/bin/yt-dlp");
         cmd.add("--no-playlist");
+        cmd.add("--restrict-filenames");  // elimina caracteres especiales del nombre
         cmd.add("-o");
         cmd.add(downloadDir + "/%(title)s.%(ext)s");
 
